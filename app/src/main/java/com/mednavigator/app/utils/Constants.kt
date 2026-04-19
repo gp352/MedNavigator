@@ -34,4 +34,5 @@ object Constants {
     const val PREF_USER_COUNTRY = "user_country"
     const val PREF_USER_AGE = "user_age"
     const val PREF_USER_SEX = "user_sex"
+    const val PREF_USER_NAME = "user_name"
 }
