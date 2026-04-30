@@ -37,11 +37,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.mednavigator.app.data.OnboardingRepository
+import com.mednavigator.app.services.ModelDownloadManager
 import com.mednavigator.app.ui.navigation.Routes
 import com.mednavigator.app.ui.viewmodel.OnboardingViewModel
 
@@ -58,6 +60,7 @@ fun OnboardingScreen(
     val selectedCountry by viewModel.selectedCountry.collectAsState()
     val selectedLanguage by viewModel.selectedLanguage.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    val context = LocalContext.current
 
     var sexExpanded by remember { mutableStateOf(false) }
     var countryExpanded by remember { mutableStateOf(false) }
@@ -218,7 +221,9 @@ fun OnboardingScreen(
         Button(
             onClick = {
                 if (viewModel.validateAndSave(onboardingRepository)) {
-                    navController.navigate(Routes.HOME) {
+                    val modelReady = ModelDownloadManager(context).getModelFile().exists()
+                    val destination = if (modelReady) Routes.HOME else Routes.MODEL_DOWNLOAD
+                    navController.navigate(destination) {
                         popUpTo(Routes.SPLASH) { inclusive = true }
                     }
                 }

@@ -49,8 +49,8 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
-    // MediaPipe GenAI — on-device Gemma inference
-    implementation("com.google.mediapipe:tasks-genai:0.10.14")
+    // LiteRT-LM — on-device Gemma inference
+    implementation("com.google.ai.edge.litertlm:litertlm-android:latest.release")
 
     // Room — local SQLite for session history
     implementation("androidx.room:room-runtime:2.7.1")

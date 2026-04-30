@@ -14,9 +14,12 @@ class AudioRecorderService {
 
     companion object {
         private const val TAG = "AudioRecorderService"
+        const val SAMPLE_RATE = 16000
+        const val CHANNELS = 1
+        const val BITS_PER_SAMPLE = 16
     }
 
-    private val sampleRate = 16000
+    private val sampleRate = SAMPLE_RATE
     private val channelConfig = AudioFormat.CHANNEL_IN_MONO
     private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
     private val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)

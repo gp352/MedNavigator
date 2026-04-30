@@ -3,6 +3,7 @@ package com.mednavigator.app.utils
 object Constants {
     // Model
     const val MODEL_FILENAME = "gemma-4-e4b-it-q4.litertlm"
+    const val MODEL_DOWNLOAD_URL = "https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm"
     const val MAX_OUTPUT_TOKENS = 2048
     const val VISION_TOKEN_BUDGET = 560   // high detail for medical photos
     const val AUDIO_MAX_SECONDS = 30
@@ -35,4 +36,6 @@ object Constants {
     const val PREF_USER_AGE = "user_age"
     const val PREF_USER_SEX = "user_sex"
     const val PREF_USER_NAME = "user_name"
+    const val PREF_MODEL_READY = "model_ready"
+    const val SYSTEM_PROMPT = "You are MedNavigator, a calm medical assistant. Keep responses concise, practical, and in the user's language."
 }

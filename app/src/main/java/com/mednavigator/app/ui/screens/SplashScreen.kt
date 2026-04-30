@@ -18,18 +18,27 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.mednavigator.app.data.OnboardingRepository
+import com.mednavigator.app.services.ModelDownloadManager
 import com.mednavigator.app.ui.navigation.Routes
 
 @Composable
 fun SplashScreen(navController: NavController, onboardingRepository: OnboardingRepository) {
+    val context = LocalContext.current
+
     LaunchedEffect(Unit) {
-        val destination = if (onboardingRepository.isOnboardingComplete()) {
-            Routes.HOME
-        } else {
+        val isOnboarded = onboardingRepository.isOnboardingComplete()
+        val modelReady = ModelDownloadManager(context).getModelFile().exists()
+
+        val destination = if (!isOnboarded) {
             Routes.ONBOARDING
+        } else if (!modelReady) {
+            Routes.MODEL_DOWNLOAD
+        } else {
+            Routes.HOME
         }
         navController.navigate(destination) {
             popUpTo(Routes.SPLASH) { inclusive = true }

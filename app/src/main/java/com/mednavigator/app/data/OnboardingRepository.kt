@@ -31,4 +31,16 @@ class OnboardingRepository(context: Context) {
         return prefs.getString(Constants.PREF_USER_LANGUAGE, null)
             ?: LanguageUtils.getDeviceLanguageCode()
     }
+
+    fun getUserAge(): Int {
+        return prefs.getInt(Constants.PREF_USER_AGE, 0)
+    }
+
+    fun getUserSex(): String {
+        return prefs.getString(Constants.PREF_USER_SEX, "") ?: ""
+    }
+
+    fun getUserCountry(): String {
+        return prefs.getString(Constants.PREF_USER_COUNTRY, "") ?: ""
+    }
 }

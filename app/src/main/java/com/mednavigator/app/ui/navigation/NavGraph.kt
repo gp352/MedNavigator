@@ -6,6 +6,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.mednavigator.app.data.OnboardingRepository
 import com.mednavigator.app.ui.screens.HomeScreen
+import com.mednavigator.app.ui.screens.ModelDownloadScreen
 import com.mednavigator.app.ui.screens.OnboardingScreen
 import com.mednavigator.app.ui.screens.SettingsScreen
 import com.mednavigator.app.ui.screens.SplashScreen
@@ -19,6 +20,9 @@ fun NavGraph(navController: NavHostController, onboardingRepository: OnboardingR
         }
         composable(Routes.ONBOARDING) {
             OnboardingScreen(navController, onboardingRepository)
+        }
+        composable(Routes.MODEL_DOWNLOAD) {
+            ModelDownloadScreen(navController)
         }
         composable(Routes.HOME) {
             HomeScreen(navController, onboardingRepository)
