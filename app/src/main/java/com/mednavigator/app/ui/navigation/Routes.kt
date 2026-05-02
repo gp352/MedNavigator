@@ -7,4 +7,5 @@ object Routes {
     const val MODEL_DOWNLOAD = "model_download"
     const val VOICE_INPUT = "voice_input"
     const val SETTINGS = "settings"
+    const val CHAT = "chat"
 }

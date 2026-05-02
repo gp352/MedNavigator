@@ -22,10 +22,11 @@ import androidx.compose.ui.unit.dp
 fun InputOptionCard(
     icon: ImageVector,
     label: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier
+        modifier = modifier
             .width(110.dp)
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(

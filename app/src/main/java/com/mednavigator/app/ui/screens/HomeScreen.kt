@@ -68,20 +68,14 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomeScreen(
     navController: NavController,
-    onboardingRepository: OnboardingRepository,
-    voiceViewModel: VoiceViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    onboardingRepository: OnboardingRepository
 ) {
     val userName = remember { onboardingRepository.getUserName() }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    val isRecording by voiceViewModel.isRecording.collectAsState()
-    val statusText by voiceViewModel.statusText.collectAsState()
-    val responseText by voiceViewModel.responseText.collectAsState()
-    val isSpeaking by voiceViewModel.isSpeaking.collectAsState()
-
-    var showVoiceSheet by remember { mutableStateOf(false) }
+    val contextActivity = context as? androidx.activity.ComponentActivity
 
     var hasMicPermission by remember {
         mutableStateOf(
@@ -98,11 +92,10 @@ fun HomeScreen(
     ) { granted ->
         hasMicPermission = granted
         if (granted) {
-            showVoiceSheet = true
+            navController.navigate(Routes.CHAT)
         } else {
-            val activity = context as? androidx.activity.ComponentActivity
-            if (activity != null && !ActivityCompat.shouldShowRequestPermissionRationale(
-                    activity, Manifest.permission.RECORD_AUDIO
+            if (contextActivity != null && !ActivityCompat.shouldShowRequestPermissionRationale(
+                    contextActivity, Manifest.permission.RECORD_AUDIO
                 )
             ) {
                 showMicPermissionDialog = true
@@ -110,9 +103,9 @@ fun HomeScreen(
         }
     }
 
-    fun requestMicPermission() {
+    fun requestMicPermissionAndNavigate() {
         if (hasMicPermission) {
-            showVoiceSheet = true
+            navController.navigate(Routes.CHAT)
         } else {
             micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
@@ -127,22 +120,12 @@ fun HomeScreen(
         )
     }
 
-    val scanLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.TakePicturePreview()
-    ) { bitmap ->
-        if (bitmap != null) {
-            scope.launch { snackbarHostState.showSnackbar("Scan captured") }
-        } else {
-            scope.launch { snackbarHostState.showSnackbar("Scan cancelled") }
-        }
-    }
-
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         hasCameraPermission = granted
         if (granted) {
-            scanLauncher.launch(null)
+            navController.navigate(Routes.CHAT)
         } else {
             scope.launch { snackbarHostState.showSnackbar("Camera permission required") }
         }
@@ -152,25 +135,15 @@ fun HomeScreen(
         ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
-            val name = getDisplayName(context, uri)
-            scope.launch { snackbarHostState.showSnackbar("Uploaded: $name") }
+            navController.navigate(Routes.CHAT)
         }
     }
 
-    fun requestCameraPermissionAndScan() {
+    fun requestCameraPermissionAndNavigate() {
         if (hasCameraPermission) {
-            scanLauncher.launch(null)
+            navController.navigate(Routes.CHAT)
         } else {
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-        }
-    }
-
-    LaunchedEffect(showVoiceSheet) {
-        if (showVoiceSheet && !isRecording) {
-            voiceViewModel.toggleRecording()
-        }
-        if (!showVoiceSheet && isRecording) {
-            voiceViewModel.toggleRecording()
         }
     }
 
@@ -214,9 +187,9 @@ fun HomeScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp)
+                    .height(200.dp)
                     .clip(RoundedCornerShape(20.dp))
-                    .clickable { requestMicPermission() },
+                    .clickable { requestMicPermissionAndNavigate() },
                 shape = RoundedCornerShape(20.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.Transparent)
@@ -236,31 +209,31 @@ fun HomeScreen(
                     Icon(
                         imageVector = Icons.Rounded.Mic,
                         contentDescription = null,
-                        modifier = Modifier.size(64.dp),
+                        modifier = Modifier.size(80.dp),
                         tint = Color.White
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "Tap to Speak",
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.headlineSmall,
                         color = Color.White
                     )
                     Text(
-                        text = "Tap here to start voice input",
+                        text = "Start a voice conversation with AI",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.8f)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             Text(
-                text = "Other Options",
+                text = "More Input Methods",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -269,17 +242,20 @@ fun HomeScreen(
                 InputOptionCard(
                     icon = Icons.Rounded.DocumentScanner,
                     label = "Scan",
-                    onClick = { requestCameraPermissionAndScan() }
+                    onClick = { requestCameraPermissionAndNavigate() },
+                    modifier = Modifier.weight(1f)
                 )
                 InputOptionCard(
                     icon = Icons.Rounded.CameraAlt,
                     label = "Click",
-                    onClick = { scope.launch { snackbarHostState.showSnackbar("Coming soon") } }
+                    onClick = { requestCameraPermissionAndNavigate() },
+                    modifier = Modifier.weight(1f)
                 )
                 InputOptionCard(
                     icon = Icons.Rounded.UploadFile,
                     label = "Upload",
-                    onClick = { uploadLauncher.launch(arrayOf("application/pdf", "image/*")) }
+                    onClick = { uploadLauncher.launch(arrayOf("application/pdf", "image/*")) },
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
@@ -302,80 +278,6 @@ fun HomeScreen(
                 androidx.compose.material3.TextButton(onClick = { showMicPermissionDialog = false }) { Text("Cancel") }
             }
         )
-    }
-
-    if (showVoiceSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showVoiceSheet = false }
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = statusText,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (isRecording) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                MicButton(
-                    isRecording = isRecording,
-                    onClick = { voiceViewModel.toggleRecording() }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                ResponseCard(
-                    icon = Icons.Rounded.DocumentScanner,
-                    label = "Your Voice",
-                    text = when {
-                        isRecording -> "Listening..."
-                        responseText.isNotBlank() -> "Audio recorded successfully"
-                        else -> ""
-                    },
-                    accentColor = MaterialTheme.colorScheme.primary
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                ResponseCard(
-                    icon = Icons.Rounded.RecordVoiceOver,
-                    label = "Response",
-                    text = responseText,
-                    accentColor = MaterialTheme.colorScheme.secondary
-                )
-
-                if (responseText.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        androidx.compose.material3.OutlinedButton(
-                            onClick = { voiceViewModel.speakResponse() },
-                            modifier = Modifier.weight(1f),
-                            enabled = !isSpeaking
-                        ) {
-                            Icon(Icons.Rounded.PlayArrow, null)
-                            Text("Play")
-                        }
-                        androidx.compose.material3.OutlinedButton(
-                            onClick = { voiceViewModel.clearAll() },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Rounded.Clear, null)
-                            Text("Clear")
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 

@@ -5,6 +5,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.mednavigator.app.data.OnboardingRepository
+import com.mednavigator.app.ui.screens.ChatScreen
 import com.mednavigator.app.ui.screens.HomeScreen
 import com.mednavigator.app.ui.screens.ModelDownloadScreen
 import com.mednavigator.app.ui.screens.OnboardingScreen
@@ -32,6 +33,9 @@ fun NavGraph(navController: NavHostController, onboardingRepository: OnboardingR
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(navController)
+        }
+        composable(Routes.CHAT) {
+            ChatScreen(navController)
         }
     }
 }
