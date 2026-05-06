@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mednavigator.app.data.ChatRepository
+import com.mednavigator.app.data.IcdRepository
 import com.mednavigator.app.data.OnboardingRepository
 import com.mednavigator.app.data.models.ChatMessage
 import com.mednavigator.app.data.models.Conversation
@@ -33,6 +34,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val chatRepository = ChatRepository(application)
     private val gemmaService = GemmaInferenceService(application)
     private val modelDownloadManager = ModelDownloadManager(application)
+    private val icdRepository = IcdRepository.getInstance(application)
 
     // Model and Download state
     private val _downloadState = MutableStateFlow<ModelDownloadState>(ModelDownloadState.NotDownloaded)
@@ -86,6 +88,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (state is ModelDownloadState.Downloaded) {
                     loadModelIfNeeded()
                 }
+            }
+        }
+
+        // Initialize ICD knowledge base in background
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                icdRepository.initializeIfNeeded()
+                val stats = icdRepository.getDatabaseStats()
+                Log.d(TAG, "ICD database initialized: $stats")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to initialize ICD database", e)
+                // Continue anyway - app can still function without ICD DB
             }
         }
 
@@ -219,7 +233,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 _statusMessage.value = "AI is thinking..."
                 _currentResponse.value = ""
 
-                val prompt = buildPrompt()
+                // Build prompt with ICD knowledge base context
+                val prompt = withContext(Dispatchers.IO) {
+                    buildPromptWithIcdContext(userText)
+                }
+
                 // For text messages, we use the non-streaming path for now
                 // In future, can integrate streaming for better UX
                 val response = withContext(Dispatchers.IO) {
@@ -317,6 +335,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 _statusMessage.value = "Processing audio..."
                 _currentResponse.value = ""
 
+                // For voice input, use base prompt (ICD context can be added by model analysis)
                 val prompt = buildPrompt()
 
                 // Use streaming for voice input
@@ -346,6 +365,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         fullResponse += chunk
                         _currentResponse.value = fullResponse
                         _statusMessage.value = "AI is responding..."
+                    }
+
+                    // Extract symptoms from model response for better context next time
+                    val detectedSymptoms = extractSymptoms(fullResponse)
+                    if (detectedSymptoms.isNotEmpty()) {
+                        Log.d(TAG, "Detected symptoms in response: $detectedSymptoms")
                     }
 
                     // Save AI response
@@ -486,6 +511,63 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     Respond in the user's language ($language). Keep the response concise and practical.
     If urgent symptoms are inferred, advise seeking immediate medical care.
     """.trimIndent()
+    }
+
+    /**
+     * Extract potential symptoms from user message for ICD context
+     */
+    private fun extractSymptoms(userMessage: String): List<String> {
+        // Common symptom keywords to detect
+        val commonSymptoms = listOf(
+            "chest pain", "chest", "heart", "palpitations",
+            "shortness of breath", "dyspnea", "breathing", "cough",
+            "fever", "temperature", "headache", "head pain",
+            "dizziness", "vertigo", "nausea", "vomiting",
+            "abdominal pain", "stomach", "diarrhea", "constipation",
+            "back pain", "joint pain", "arthritis",
+            "anxiety", "depression", "stress",
+            "flu", "cold", "infection", "virus"
+        )
+
+        val lowerMessage = userMessage.lowercase()
+        return commonSymptoms.filter { symptom ->
+            lowerMessage.contains(symptom)
+        }
+    }
+
+    /**
+     * Build prompt with ICD knowledge base context
+     */
+    private suspend fun buildPromptWithIcdContext(userMessage: String): String {
+        val basePrompt = buildPrompt()
+
+        // Extract symptoms and build ICD context
+        val symptoms = extractSymptoms(userMessage)
+        val icdContext = if (symptoms.isNotEmpty()) {
+            icdRepository.buildComprehensiveMedicalContext(symptoms)
+        } else {
+            ""
+        }
+
+        val language = onboardingRepository.getUserLanguage()
+        Log.d(TAG, "Building prompt with language: $language, detected symptoms: $symptoms")
+
+        return if (icdContext.isNotEmpty()) {
+            """
+            $basePrompt
+            
+            $icdContext
+            """.trimIndent()
+        } else {
+            basePrompt
+        }
+    }
+
+    /**
+     * Get comprehensive medical statistics (for testing)
+     */
+    suspend fun getIcdDatabaseStats(): Map<String, Int> {
+        return icdRepository.getDatabaseStats()
     }
 
     override fun onCleared() {
