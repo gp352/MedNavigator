@@ -9,7 +9,8 @@ data class HealthFacility(
     val country: String,
     val city: String,
     val latitude: Double = 0.0,
-    val longitude: Double = 0.0
+    val longitude: Double = 0.0,
+    val emergencyServices: Boolean = false
 ) {
     fun toJson(): String {
         return """
@@ -19,7 +20,8 @@ data class HealthFacility(
               "specialty": "$specialty",
               "address": "$address",
               "phone": "$phone",
-              "city": "$city"
+              "city": "$city",
+              "emergencyServices": $emergencyServices
             }
         """.trimIndent()
     }
