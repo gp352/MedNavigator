@@ -15,7 +15,9 @@ import com.mednavigator.app.services.GemmaInferenceService
 import com.mednavigator.app.services.ModelDownloadManager
 import com.mednavigator.app.services.ModelDownloadState
 import com.mednavigator.app.services.TextToSpeechService
+import com.mednavigator.app.ui.components.VoiceInteractionState
 import com.mednavigator.app.utils.Constants
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -78,6 +80,22 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     // Speaking state
     private val _isSpeaking = MutableStateFlow(false)
     val isSpeaking: StateFlow<Boolean> = _isSpeaking
+
+    // Voice interaction state for HomeScreen
+    private val _voiceState = MutableStateFlow<VoiceInteractionState>(VoiceInteractionState.Idle)
+    val voiceState: StateFlow<VoiceInteractionState> = _voiceState
+
+    // User transcription text
+    private val _userTranscription = MutableStateFlow("")
+    val userTranscription: StateFlow<String> = _userTranscription
+
+    // Current AI response for overlay
+    private val _overlayResponse = MutableStateFlow("")
+    val overlayResponse: StateFlow<String> = _overlayResponse
+
+    // Exchange counter for current session
+    private val _exchangeCount = MutableStateFlow(0)
+    val exchangeCount: StateFlow<Int> = _exchangeCount
 
     init {
         // Initialize model state
@@ -293,9 +311,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun startVoiceRecording() {
         if (_isProcessing.value || _isRecording.value) return
-        
         if (!ensureModelReady()) return
 
+        _voiceState.value = VoiceInteractionState.Listening
         _isRecording.value = true
         _statusMessage.value = "Listening..."
 
@@ -305,6 +323,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 Log.e(TAG, "Failed to start recording: ${result.exceptionOrNull()?.message}")
                 withContext(Dispatchers.Main) {
                     _isRecording.value = false
+                    _voiceState.value = VoiceInteractionState.Idle
                     _statusMessage.value = "Recording failed"
                 }
             }
@@ -318,121 +337,86 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (!_isRecording.value) return
         _isRecording.value = false
 
-        val audioBytes = audioRecorder.stopRecording()
+        val ts = System.currentTimeMillis()
+        val userAudioFile = File(getAudioDir(), "user_$ts.wav")
+        val audioBytes = audioRecorder.stopAndSaveToFile(userAudioFile)
         val hasAudio = audioBytes != null && audioBytes.isNotEmpty()
 
         if (!hasAudio) {
             _statusMessage.value = "No audio recorded"
+            _voiceState.value = VoiceInteractionState.Idle
             return
         }
 
-        val conversationId = _currentConversation.value?.id ?: return
+        val conversationId = _currentConversation.value?.id ?: run {
+            _voiceState.value = VoiceInteractionState.Idle
+            return
+        }
 
         viewModelScope.launch {
             try {
                 _isProcessing.value = true
-                _isTyping.value = true
                 _statusMessage.value = "Processing audio..."
                 _currentResponse.value = ""
 
-                // For voice input, use base prompt (ICD context can be added by model analysis)
+                _voiceState.value = VoiceInteractionState.Processing("Transcribing your voice...")
                 val prompt = buildPrompt()
 
-                // Use streaming for voice input
                 withContext(Dispatchers.IO) {
                     chatRepository.addMessage(
                         conversationId = conversationId,
                         role = "user",
-                        content = "[Voice message received]"
+                        content = "[Voice message]",
+                        messageType = "AUDIO",
+                        audioFilePath = userAudioFile.absolutePath
                     )
                 }
 
-                // Create user message bubble
-                val userMessage = ChatMessage(
-                    id = 0,
-                    conversationId = conversationId,
-                    role = "user",
-                    content = "[Voice message]",
-                    timestamp = System.currentTimeMillis(),
-                    messageType = "AUDIO"
-                )
-                _messages.value = _messages.value + userMessage
+                _statusMessage.value = "AI is processing..."
+                val response = withContext(Dispatchers.IO) {
+                    gemmaService.generateResponse(prompt, audioBytes)
+                }
 
-                // Stream the response
-                try {
-                    _statusMessage.value = "AI is processing..."
-                    val response = gemmaService.generateResponse(prompt, audioBytes)
-                    
-                    if (response.isSuccess) {
-                        val fullResponse = response.getOrDefault("")
-                        _currentResponse.value = fullResponse
+                if (response.isSuccess) {
+                    val fullResponse = response.getOrDefault("")
+                    _overlayResponse.value = fullResponse
 
-                        // Extract symptoms from model response for better context next time
-                        val detectedSymptoms = extractSymptoms(fullResponse)
-                        if (detectedSymptoms.isNotEmpty()) {
-                            Log.d(TAG, "Detected symptoms in response: $detectedSymptoms")
-                        }
+                    val aiAudioFile = File(getAudioDir(), "ai_$ts.wav")
+                    val language = onboardingRepository.getUserLanguage()
+                    ttsService.synthesizeToFile(fullResponse, aiAudioFile, language)
 
-                        // Save AI response
-                        val messageId = withContext(Dispatchers.IO) {
-                            chatRepository.addMessage(
-                                conversationId = conversationId,
-                                role = "assistant",
-                                content = fullResponse
-                            )
-                        }
-
-                        // Create AI message bubble
-                        val aiMessage = ChatMessage(
-                            id = messageId.toInt(),
+                    val messageId = withContext(Dispatchers.IO) {
+                        chatRepository.addMessage(
                             conversationId = conversationId,
                             role = "assistant",
                             content = fullResponse,
-                            timestamp = System.currentTimeMillis()
+                            responseAudioPath = aiAudioFile.absolutePath
                         )
+                    }
 
-                        withContext(Dispatchers.Main) {
-                            _messages.value = _messages.value + aiMessage
-                            _statusMessage.value = "Response ready"
-                            speakResponse(fullResponse)
-                        }
-                    } else {
-                        throw Exception(response.exceptionOrNull()?.message ?: "Failed to generate response")
+                    _voiceState.value = VoiceInteractionState.Responding(
+                        responseText = fullResponse,
+                        isSpeaking = true
+                    )
+
+                    _exchangeCount.value += 1
+                    _statusMessage.value = "Responding..."
+
+                    ttsService.speak(fullResponse, language) {
+                        _voiceState.value = VoiceInteractionState.Idle
+                        _isProcessing.value = false
+                        _statusMessage.value = "Ready"
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Response generation failed", e)
-                    val response = gemmaService.generateResponse(prompt, audioBytes)
-                    if (response.isSuccess) {
-                        val fullResponse = response.getOrDefault("")
-                        val messageId = withContext(Dispatchers.IO) {
-                            chatRepository.addMessage(
-                                conversationId = conversationId,
-                                role = "assistant",
-                                content = fullResponse
-                            )
-                        }
-                        val aiMessage = ChatMessage(
-                            id = messageId.toInt(),
-                            conversationId = conversationId,
-                            role = "assistant",
-                            content = fullResponse,
-                            timestamp = System.currentTimeMillis()
-                        )
-                        withContext(Dispatchers.Main) {
-                            _messages.value = _messages.value + aiMessage
-                            _statusMessage.value = "Response ready"
-                            speakResponse(fullResponse)
-                        }
-                    }
+                } else {
+                    val errorMsg = response.exceptionOrNull()?.message ?: "Unknown error"
+                    _statusMessage.value = "Error: $errorMsg"
+                    _voiceState.value = VoiceInteractionState.Idle
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing voice message", e)
-                withContext(Dispatchers.Main) {
-                    _statusMessage.value = "Error: ${e.message}"
-                }
-            } finally {
+                _statusMessage.value = "Error: ${e.message}"
+                _voiceState.value = VoiceInteractionState.Idle
                 _isProcessing.value = false
-                _isTyping.value = false
             }
         }
     }
@@ -443,13 +427,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private fun speakResponse(text: String) {
         if (text.isBlank()) return
         val language = onboardingRepository.getUserLanguage()
-        ttsService.speak(text, language)
-        _isSpeaking.value = true
-
-        viewModelScope.launch {
-            kotlinx.coroutines.delay(4000)
+        ttsService.speak(text, language) {
             _isSpeaking.value = false
         }
+        _isSpeaking.value = true
     }
 
     /**
@@ -477,6 +458,46 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 Log.e(TAG, "Error ending conversation", e)
             }
         }
+    }
+
+    private fun getAudioDir(): File {
+        val dir = File(getApplication<Application>().filesDir, "audio")
+        dir.mkdirs()
+        return dir
+    }
+
+    fun startNewVoiceSession() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                endConversationSilent()
+                val title = "Voice Session - ${System.currentTimeMillis()}"
+                val conversationId = chatRepository.createConversation(title)
+                val conversation = chatRepository.getConversationWithMessages(conversationId.toInt())
+                withContext(Dispatchers.Main) {
+                    _currentConversation.value = conversation
+                    _messages.value = emptyList()
+                    _exchangeCount.value = 0
+                    _voiceState.value = VoiceInteractionState.Idle
+                    _statusMessage.value = "Ready"
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to start new voice session", e)
+            }
+        }
+    }
+
+    private suspend fun endConversationSilent() {
+        val id = _currentConversation.value?.id ?: return
+        try {
+            chatRepository.endConversation(id)
+        } catch (_: Exception) {}
+    }
+
+    fun stopSpeaking() {
+        ttsService.stop()
+        _voiceState.value = VoiceInteractionState.Idle
+        _isProcessing.value = false
+        _statusMessage.value = "Ready"
     }
 
     /**
