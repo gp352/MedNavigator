@@ -33,10 +33,10 @@ fun SplashScreen(navController: NavController, onboardingRepository: OnboardingR
         val isOnboarded = onboardingRepository.isOnboardingComplete()
         val modelReady = ModelDownloadManager(context).getModelFile().exists()
 
-        val destination = if (!isOnboarded) {
-            Routes.ONBOARDING
-        } else if (!modelReady) {
+        val destination = if (!modelReady) {
             Routes.MODEL_DOWNLOAD
+        } else if (!isOnboarded) {
+            Routes.ONBOARDING
         } else {
             Routes.HOME
         }
