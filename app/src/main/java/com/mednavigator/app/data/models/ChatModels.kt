@@ -11,7 +11,9 @@ data class ChatMessage(
     val timestamp: Long,
     val messageType: String = "TEXT", // TEXT, IMAGE, ANNOTATION
     val imageHash: String? = null,
-    val reasoningSteps: List<ReasoningStep> = emptyList()
+    val reasoningSteps: List<ReasoningStep> = emptyList(),
+    val audioFilePath: String? = null,
+    val responseAudioPath: String? = null
 ) {
     fun isFromUser(): Boolean = role == "user"
     fun isFromAssistant(): Boolean = role == "assistant"

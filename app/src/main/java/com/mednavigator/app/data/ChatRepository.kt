@@ -10,7 +10,7 @@ class ChatRepository(context: Context) {
         context.applicationContext,
         AppDatabase::class.java,
         "med_navigator.db"
-    ).build()
+    ).addMigrations(MIGRATION_2_3).build()
 
     private val conversationDao = database.conversationDao()
     private val messageDao = database.chatMessageDao()
@@ -46,7 +46,9 @@ class ChatRepository(context: Context) {
         content: String,
         messageType: String = "TEXT",
         imageHash: String? = null,
-        reasoningSteps: List<ReasoningStep> = emptyList()
+        reasoningSteps: List<ReasoningStep> = emptyList(),
+        audioFilePath: String? = null,
+        responseAudioPath: String? = null
     ): Long {
         val reasoningJson = if (reasoningSteps.isNotEmpty()) {
             com.google.gson.Gson().toJson(reasoningSteps)
@@ -61,7 +63,9 @@ class ChatRepository(context: Context) {
             timestamp = System.currentTimeMillis(),
             messageType = messageType,
             imageHash = imageHash,
-            reasoningJson = reasoningJson
+            reasoningJson = reasoningJson,
+            audioFilePath = audioFilePath,
+            responseAudioPath = responseAudioPath
         )
         return messageDao.insertMessage(message)
     }

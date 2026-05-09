@@ -48,7 +48,9 @@ data class ChatMessageEntity(
     val timestamp: Long,
     val messageType: String,
     val imageHash: String? = null,
-    val reasoningJson: String? = null
+    val reasoningJson: String? = null,
+    val audioFilePath: String? = null,
+    val responseAudioPath: String? = null
 )
 
 // DAO
@@ -97,10 +99,18 @@ interface ChatMessageDao {
     suspend fun deleteMessagesForConversation(conversationId: Int)
 }
 
+// Migration from v2 to v3: add audio path columns
+val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE chat_messages ADD COLUMN audioFilePath TEXT")
+        db.execSQL("ALTER TABLE chat_messages ADD COLUMN responseAudioPath TEXT")
+    }
+}
+
 // Database
 @Database(
     entities = [SessionEntity::class, ConversationEntity::class, ChatMessageEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

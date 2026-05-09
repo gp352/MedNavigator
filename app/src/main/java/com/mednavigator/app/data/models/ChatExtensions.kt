@@ -22,7 +22,9 @@ fun ChatMessageEntity.toDomain(): ChatMessage {
         timestamp = timestamp,
         messageType = messageType,
         imageHash = imageHash,
-        reasoningSteps = reasoningSteps
+        reasoningSteps = reasoningSteps,
+        audioFilePath = audioFilePath,
+        responseAudioPath = responseAudioPath
     )
 }
 
@@ -41,7 +43,9 @@ fun ChatMessage.toEntity(): ChatMessageEntity {
         timestamp = timestamp,
         messageType = messageType,
         imageHash = imageHash,
-        reasoningJson = reasoningJson
+        reasoningJson = reasoningJson,
+        audioFilePath = audioFilePath,
+        responseAudioPath = responseAudioPath
     )
 }
 
