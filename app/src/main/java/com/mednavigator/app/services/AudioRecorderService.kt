@@ -108,6 +108,45 @@ class AudioRecorderService {
         return bytes
     }
 
+    fun stopAndSaveToFile(outputFile: java.io.File): ByteArray? {
+        val pcmBytes = stopRecording()
+        if (pcmBytes == null || pcmBytes.isEmpty()) return null
+
+        val dataLength = pcmBytes.size
+        val totalLength = 36 + dataLength
+
+        val header = java.io.ByteArrayOutputStream()
+        header.write("RIFF".toByteArray())
+        writeInt(header, totalLength)
+        header.write("WAVE".toByteArray())
+        header.write("fmt ".toByteArray())
+        writeInt(header, 16)
+        writeShort(header, 1.toShort())
+        writeShort(header, CHANNELS.toShort())
+        writeInt(header, SAMPLE_RATE)
+        writeInt(header, SAMPLE_RATE * CHANNELS * BITS_PER_SAMPLE / 8)
+        writeShort(header, (CHANNELS * BITS_PER_SAMPLE / 8).toShort())
+        writeShort(header, BITS_PER_SAMPLE.toShort())
+        header.write("data".toByteArray())
+        writeInt(header, dataLength)
+
+        outputFile.parentFile?.mkdirs()
+        outputFile.writeBytes(header.toByteArray() + pcmBytes)
+        return pcmBytes
+    }
+
+    private fun writeInt(out: java.io.ByteArrayOutputStream, value: Int) {
+        out.write(value and 0xFF)
+        out.write((value shr 8) and 0xFF)
+        out.write((value shr 16) and 0xFF)
+        out.write((value shr 24) and 0xFF)
+    }
+
+    private fun writeShort(out: java.io.ByteArrayOutputStream, value: Short) {
+        out.write(value.toInt() and 0xFF)
+        out.write((value.toInt() shr 8) and 0xFF)
+    }
+
     fun release() {
         stopRecording()
     }
