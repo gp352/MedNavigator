@@ -11,9 +11,8 @@ import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.mednavigator.app.utils.AudioUtils
 import com.mednavigator.app.utils.Constants
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import java.io.Closeable
 import java.io.File
 
@@ -30,34 +29,44 @@ class GemmaInferenceService(private val context: Context) : Closeable {
 
     fun isLoaded(): Boolean = engine != null
 
-    fun loadModel(modelFile: File): Result<Unit> {
+    suspend fun loadModel(modelFile: File): Result<Unit> {
         if (engine != null && loadedModelPath == modelFile.absolutePath) {
             return Result.success(Unit)
         }
 
         return try {
             close()
-            val config = EngineConfig(
-                modelPath = modelFile.absolutePath,
-                backend = Backend.CPU(),
-                audioBackend = Backend.CPU(),
-                cacheDir = context.cacheDir.path
-            )
-            val newEngine = Engine(config)
-            newEngine.initialize()
-            engine = newEngine
-            loadedModelPath = modelFile.absolutePath
+            Log.d(TAG, "Starting model load from ${modelFile.absolutePath}")
+            
+            withTimeout(60000L) { // 60 second timeout
+                val config = EngineConfig(
+                    modelPath = modelFile.absolutePath,
+                    backend = Backend.CPU(),
+                    audioBackend = Backend.CPU(),
+                    cacheDir = context.cacheDir.path
+                )
+                val newEngine = Engine(config)
+                Log.d(TAG, "Initializing engine...")
+                newEngine.initialize()
+                Log.d(TAG, "Engine initialized successfully")
+                engine = newEngine
+                loadedModelPath = modelFile.absolutePath
+            }
             Result.success(Unit)
+        } catch (e: TimeoutCancellationException) {
+            Log.e(TAG, "Model load timed out", e)
+            Result.failure(Exception("Model loading timed out. Please try again."))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load model", e)
             Result.failure(e)
         }
     }
 
-    fun generateResponse(prompt: String, pcm16Audio: ByteArray): Result<String> {
+    suspend fun generateResponse(prompt: String, pcm16Audio: ByteArray): Result<String> {
         val activeEngine = engine ?: return Result.failure(IllegalStateException("Model not loaded"))
 
         return try {
+            Log.d(TAG, "Starting inference...")
             val trimmed = AudioUtils.trimToMaxSeconds(
                 pcmData = pcm16Audio,
                 sampleRate = AudioRecorderService.SAMPLE_RATE,
@@ -71,25 +80,41 @@ class GemmaInferenceService(private val context: Context) : Closeable {
                 channels = AudioRecorderService.CHANNELS,
                 bitsPerSample = AudioRecorderService.BITS_PER_SAMPLE
             )
+            Log.d(TAG, "Audio prepared, size: ${wavBytes.size} bytes")
 
             val conversationConfig = ConversationConfig(
                 systemInstruction = Contents.of(Content.Text(prompt))
             )
 
+            withTimeout(90000L) { // 90 second timeout for inference
+                synchronized(sessionLock) {
+                    conversation?.close()
+                    Log.d(TAG, "Creating conversation...")
+                    conversation = activeEngine.createConversation(conversationConfig)
+                }
+
+                Log.d(TAG, "Sending message to model...")
+                val message = conversation?.sendMessage(
+                    Contents.of(Content.AudioBytes(wavBytes))
+                )
+
+                if (message == null) {
+                    Result.failure(IllegalStateException("Failed to create conversation"))
+                } else {
+                    Log.d(TAG, "Response received from model")
+                    Result.success(message.toString())
+                }
+            }
+        } catch (e: TimeoutCancellationException) {
+            Log.e(TAG, "Inference timed out", e)
             synchronized(sessionLock) {
-                conversation?.close()
-                conversation = activeEngine.createConversation(conversationConfig)
+                try {
+                    conversation?.close()
+                } catch (_: Exception) {
+                }
+                conversation = null
             }
-
-            val message = conversation?.sendMessage(
-                Contents.of(Content.AudioBytes(wavBytes))
-            )
-
-            if (message == null) {
-                Result.failure(IllegalStateException("Failed to create conversation"))
-            } else {
-                Result.success(message.toString())
-            }
+            Result.failure(Exception("Response generation timed out. Please try with a shorter audio."))
         } catch (e: Exception) {
             Log.e(TAG, "Inference failed", e)
             synchronized(sessionLock) {
@@ -100,83 +125,6 @@ class GemmaInferenceService(private val context: Context) : Closeable {
                 conversation = null
             }
             Result.failure(e)
-        } finally {
-            synchronized(sessionLock) {
-                try {
-                    conversation?.close()
-                } catch (_: Exception) {
-                }
-                conversation = null
-            }
-        }
-    }
-
-    /**
-     * Generate response with streaming support — emits text chunks as Flow<String>
-     * This allows real-time UI updates as the model produces output.
-     */
-    fun generateResponseStream(prompt: String, pcm16Audio: ByteArray): Flow<String> = flow {
-        val activeEngine = engine ?: throw IllegalStateException("Model not loaded")
-
-        try {
-            val trimmed = AudioUtils.trimToMaxSeconds(
-                pcmData = pcm16Audio,
-                sampleRate = AudioRecorderService.SAMPLE_RATE,
-                channels = AudioRecorderService.CHANNELS,
-                bitsPerSample = AudioRecorderService.BITS_PER_SAMPLE,
-                maxSeconds = Constants.AUDIO_MAX_SECONDS
-            )
-            val wavBytes = AudioUtils.pcmToWav(
-                pcmData = trimmed,
-                sampleRate = AudioRecorderService.SAMPLE_RATE,
-                channels = AudioRecorderService.CHANNELS,
-                bitsPerSample = AudioRecorderService.BITS_PER_SAMPLE
-            )
-
-            val conversationConfig = ConversationConfig(
-                systemInstruction = Contents.of(Content.Text(prompt))
-            )
-
-            synchronized(sessionLock) {
-                conversation?.close()
-                conversation = activeEngine.createConversation(conversationConfig)
-            }
-
-            val message = conversation?.sendMessage(
-                Contents.of(Content.AudioBytes(wavBytes))
-            )
-
-            if (message != null) {
-                // Emit the complete message (Gemma4 may not support true token streaming,
-                // so we emit the full response or chunk it manually if needed)
-                val responseText = message.toString()
-
-                // If response is lengthy, chunk it for better UX
-                val chunkSize = 50 // characters per chunk
-                var offset = 0
-                while (offset < responseText.length) {
-                    val chunk = responseText.substring(
-                        offset,
-                        minOf(offset + chunkSize, responseText.length)
-                    )
-                    emit(chunk)
-                    offset += chunkSize
-                    // Small delay to simulate streaming effect
-                    delay(10)
-                }
-            } else {
-                throw IllegalStateException("Failed to create conversation or get response")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Streaming inference failed", e)
-            synchronized(sessionLock) {
-                try {
-                    conversation?.close()
-                } catch (_: Exception) {
-                }
-                conversation = null
-            }
-            throw e
         } finally {
             synchronized(sessionLock) {
                 try {

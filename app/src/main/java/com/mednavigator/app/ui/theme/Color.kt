@@ -2,10 +2,65 @@ package com.mednavigator.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
+// Legacy (kept to avoid breaking any remaining references)
 val Purple80 = Color(0xFFD0BCFF)
 val PurpleGrey80 = Color(0xFFCCC2DC)
 val Pink80 = Color(0xFFEFB8C8)
-
 val Purple40 = Color(0xFF6650a4)
 val PurpleGrey40 = Color(0xFF625b71)
 val Pink40 = Color(0xFF7D5260)
+
+// ── Cozy Medical Assistant – Sage Green palette ──────────────────────────────
+val CozyPrimary                 = Color(0xFF426447)
+val CozyOnPrimary               = Color(0xFFFFFFFF)
+val CozyPrimaryContainer        = Color(0xFF5A7D5F)
+val CozyOnPrimaryContainer      = Color(0xFFF7FFF3)
+val CozyInversePrimary          = Color(0xFFABD0AD)
+val CozyPrimaryFixed            = Color(0xFFC6ECC8)
+val CozyPrimaryFixedDim         = Color(0xFFABD0AD)
+val CozyOnPrimaryFixed          = Color(0xFF01210B)
+val CozyOnPrimaryFixedVariant   = Color(0xFF2D4E33)
+
+val CozySecondary               = Color(0xFF466274)
+val CozyOnSecondary             = Color(0xFFFFFFFF)
+val CozySecondaryContainer      = Color(0xFFC6E4F9)
+val CozyOnSecondaryContainer    = Color(0xFF4A6678)
+val CozySecondaryFixed          = Color(0xFFC9E7FC)
+val CozySecondaryFixedDim       = Color(0xFFADCADF)
+val CozyOnSecondaryFixed        = Color(0xFF001E2D)
+val CozyOnSecondaryFixedVariant = Color(0xFF2E4A5B)
+
+val CozyTertiary                = Color(0xFF655A4B)
+val CozyOnTertiary              = Color(0xFFFFFFFF)
+val CozyTertiaryContainer       = Color(0xFF7E7362)
+val CozyOnTertiaryContainer     = Color(0xFFFFFBFF)
+val CozyTertiaryFixed           = Color(0xFFF0E0CC)
+val CozyTertiaryFixedDim        = Color(0xFFD3C4B1)
+val CozyOnTertiaryFixed         = Color(0xFF221A0E)
+val CozyOnTertiaryFixedVariant  = Color(0xFF4F4537)
+
+val CozyError                   = Color(0xFFBA1A1A)
+val CozyOnError                 = Color(0xFFFFFFFF)
+val CozyErrorContainer          = Color(0xFFFFDAD6)
+val CozyOnErrorContainer        = Color(0xFF93000A)
+
+val CozyBackground              = Color(0xFFFBF9F5)
+val CozyOnBackground            = Color(0xFF1B1C1A)
+val CozySurface                 = Color(0xFFFBF9F5)
+val CozyOnSurface               = Color(0xFF1B1C1A)
+val CozySurfaceDim              = Color(0xFFDBDAD6)
+val CozySurfaceBright           = Color(0xFFFBF9F5)
+
+val CozySurfaceContainerLowest  = Color(0xFFFFFFFF)
+val CozySurfaceContainerLow     = Color(0xFFF5F3EF)
+val CozySurfaceContainer        = Color(0xFFEFEEEA)
+val CozySurfaceContainerHigh    = Color(0xFFEAE8E4)
+val CozySurfaceContainerHighest = Color(0xFFE4E2DE)
+
+val CozyOnSurfaceVariant        = Color(0xFF424841)
+val CozyOutline                 = Color(0xFF727971)
+val CozyOutlineVariant          = Color(0xFFC2C8BF)
+val CozyInverseSurface          = Color(0xFF30312E)
+val CozyInverseOnSurface        = Color(0xFFF2F0ED)
+val CozySurfaceTint             = Color(0xFF45664A)
+val CozySurfaceVariant          = Color(0xFFE4E2DE)

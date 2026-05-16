@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -25,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Person
@@ -32,14 +34,11 @@ import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Wc
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -71,7 +70,6 @@ import com.mednavigator.app.ui.theme.CozySurfaceContainerHighest
 import com.mednavigator.app.ui.theme.CozySurfaceContainerLow
 import com.mednavigator.app.ui.viewmodel.OnboardingViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OnboardingScreen(
     navController: NavController,
@@ -94,6 +92,17 @@ fun OnboardingScreen(
         unfocusedContainerColor = CozySurfaceContainerLow, focusedContainerColor = CozySurfaceContainerLow,
         unfocusedBorderColor = Color.Transparent, focusedBorderColor = CozyPrimary,
         unfocusedLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant, focusedLeadingIconColor = CozyPrimary
+    )
+    val dropdownColors = OutlinedTextFieldDefaults.colors(
+        unfocusedContainerColor = CozySurfaceContainerLow, focusedContainerColor = CozySurfaceContainerLow,
+        disabledContainerColor = CozySurfaceContainerLow,
+        unfocusedBorderColor = Color.Transparent, focusedBorderColor = CozyPrimary,
+        disabledBorderColor = Color.Transparent,
+        unfocusedLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant, focusedLeadingIconColor = CozyPrimary,
+        disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
     )
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Box(modifier = Modifier.fillMaxWidth().height(3.dp)
@@ -132,30 +141,32 @@ fun OnboardingScreen(
                 modifier = Modifier.fillMaxWidth().height(64.dp), singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(16.dp), colors = fieldColors)
             Spacer(modifier = Modifier.height(24.dp))
-            ExposedDropdownMenuBox(expanded = sexExpanded, onExpandedChange = { sexExpanded = !sexExpanded }) {
-                OutlinedTextField(value = selectedSex, onValueChange = {}, readOnly = true, label = { Text("Biological Sex") },
-                    leadingIcon = { Icon(Icons.Rounded.Wc, null) }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(sexExpanded) },
-                    modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable), shape = RoundedCornerShape(16.dp), colors = fieldColors)
-                ExposedDropdownMenu(expanded = sexExpanded, onDismissRequest = { sexExpanded = false }) {
+            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { sexExpanded = !sexExpanded }) {
+                OutlinedTextField(value = selectedSex, onValueChange = {}, readOnly = true, enabled = false,
+                    label = { Text("Biological Sex") }, leadingIcon = { Icon(Icons.Rounded.Wc, null) },
+                    trailingIcon = { Icon(Icons.Rounded.ArrowDropDown, null) },
+                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = dropdownColors)
+                DropdownMenu(expanded = sexExpanded, onDismissRequest = { sexExpanded = false }) {
                     viewModel.sexOptions.forEach { DropdownMenuItem(text = { Text(it) }, onClick = { viewModel.selectedSex.value = it; sexExpanded = false }) }
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
-            ExposedDropdownMenuBox(expanded = countryExpanded, onExpandedChange = { countryExpanded = !countryExpanded }) {
-                OutlinedTextField(value = selectedCountry, onValueChange = {}, readOnly = true, label = { Text("Country") },
-                    leadingIcon = { Icon(Icons.Rounded.Public, null) }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(countryExpanded) },
-                    modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable), shape = RoundedCornerShape(16.dp), colors = fieldColors)
-                ExposedDropdownMenu(expanded = countryExpanded, onDismissRequest = { countryExpanded = false }) {
+            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { countryExpanded = !countryExpanded }) {
+                OutlinedTextField(value = selectedCountry, onValueChange = {}, readOnly = true, enabled = false,
+                    label = { Text("Country") }, leadingIcon = { Icon(Icons.Rounded.Public, null) },
+                    trailingIcon = { Icon(Icons.Rounded.ArrowDropDown, null) },
+                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = dropdownColors)
+                DropdownMenu(expanded = countryExpanded, onDismissRequest = { countryExpanded = false }) {
                     viewModel.countryOptions.forEach { DropdownMenuItem(text = { Text(it) }, onClick = { viewModel.selectedCountry.value = it; countryExpanded = false }) }
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
-            ExposedDropdownMenuBox(expanded = languageExpanded, onExpandedChange = { languageExpanded = !languageExpanded }) {
-                OutlinedTextField(value = viewModel.languageOptions[selectedLanguage] ?: "English", onValueChange = {}, readOnly = true,
+            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { languageExpanded = !languageExpanded }) {
+                OutlinedTextField(value = viewModel.languageOptions[selectedLanguage] ?: "English", onValueChange = {}, readOnly = true, enabled = false,
                     label = { Text("Preferred Language") }, leadingIcon = { Icon(Icons.Rounded.Language, null) },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(languageExpanded) },
-                    modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable), shape = RoundedCornerShape(16.dp), colors = fieldColors)
-                ExposedDropdownMenu(expanded = languageExpanded, onDismissRequest = { languageExpanded = false }) {
+                    trailingIcon = { Icon(Icons.Rounded.ArrowDropDown, null) },
+                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = dropdownColors)
+                DropdownMenu(expanded = languageExpanded, onDismissRequest = { languageExpanded = false }) {
                     viewModel.languageOptions.forEach { (code, display) ->
                         DropdownMenuItem(text = { Text(display) }, onClick = { viewModel.selectedLanguage.value = code; languageExpanded = false })
                     }

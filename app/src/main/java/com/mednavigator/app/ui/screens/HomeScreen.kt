@@ -16,7 +16,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -254,8 +253,8 @@ fun HomeScreen(
                                 scaleX = s; scaleY = s
                             }
                             .background(
-                                if (voiceState is VoiceInteractionState.Listening) CozyPrimary.copy(alpha = 0.5f)
-                                else CozyPrimary.copy(alpha = glowA),
+                                if (voiceState is VoiceInteractionState.Listening) CozyPrimary.copy(alpha = 0.35f)
+                                else CozyPrimary.copy(alpha = glowA * 0.55f),
                                 CircleShape
                             )
                         )
@@ -356,7 +355,7 @@ fun HomeScreen(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
                             shape = RoundedCornerShape(24.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
-                            elevation = CardDefaults.cardElevation(4.dp)
+                            elevation = CardDefaults.cardElevation(0.dp)
                         ) {
                             Column(modifier = Modifier.padding(20.dp)) {
                                 Text("AI Response", style = MaterialTheme.typography.labelLarge, color = CozyPrimary)
@@ -441,18 +440,23 @@ fun BottomNavItem(
     icon: ImageVector, label: String, isActive: Boolean,
     onClick: () -> Unit, highlighted: Boolean = false
 ) {
-    val bg = if (isActive || highlighted) CozyPrimaryFixed else Color.Transparent
+    val active = isActive || highlighted
+    val bg = if (active) Color(0xFFE8EFE9) else Color.Transparent
     Column(
-        modifier = Modifier.clip(CircleShape).background(bg).clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(icon, label,
-            tint = if (isActive || highlighted) CozyPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = if (active) CozyPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.height(2.dp))
         Text(label, style = MaterialTheme.typography.labelSmall,
-            color = if (isActive || highlighted) CozyPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+            color = if (active) CozyPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = if (active) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal)
     }
 }
 
@@ -461,13 +465,11 @@ fun GlassCard(icon: ImageVector, label: String, iconBg: Color, modifier: Modifie
     Card(
         modifier = modifier.height(116.dp).clickable(onClick = onClick),
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f)),
-        elevation = CardDefaults.cardElevation(2.dp)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)),
+        elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize()
-                .border(1.dp, CozyPrimary.copy(alpha = 0.10f), RoundedCornerShape(24.dp))
-                .padding(16.dp),
+            modifier = Modifier.fillMaxSize().padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -485,7 +487,6 @@ fun SuggestionChip(text: String) {
     Box(
         modifier = Modifier.clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceContainer)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

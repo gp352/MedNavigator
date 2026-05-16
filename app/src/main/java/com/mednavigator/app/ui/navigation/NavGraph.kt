@@ -21,7 +21,7 @@ fun NavGraph(navController: NavHostController, onboardingRepository: OnboardingR
             SplashScreen(navController, onboardingRepository)
         }
         composable(Routes.MODEL_DOWNLOAD) {
-            ModelDownloadScreen(navController)
+            ModelDownloadScreen(navController, onboardingRepository)
         }
         composable(Routes.ONBOARDING) {
             OnboardingScreen(navController, onboardingRepository)
