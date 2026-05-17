@@ -109,6 +109,16 @@ fun HomeScreen(
     val exchangeCount by viewModel.exchangeCount.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
 
+    // Start a fresh session each time the user arrives at HomeScreen
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.startNewVoiceSession()
+    }
+
+    // Cancel any in-flight AI request + TTS when the user leaves this screen
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { viewModel.pauseSession() }
+    }
+
     var hasMicPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
@@ -315,21 +325,26 @@ fun HomeScreen(
 
                     Text(
                         text = when (voiceState) {
-                            is VoiceInteractionState.Idle -> "Tap to begin"
+                            is VoiceInteractionState.Idle -> if (exchangeCount > 0) "Tap to continue" else "Tap to begin"
                             is VoiceInteractionState.Listening -> "Listening..."
-                            is VoiceInteractionState.Processing -> "Thinking..."
+                            is VoiceInteractionState.Processing -> "Processing your voice..."
                             is VoiceInteractionState.Responding -> "Speaking..."
                         },
                         style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = when (voiceState) {
+                            is VoiceInteractionState.Listening -> CozyPrimary
+                            is VoiceInteractionState.Processing -> MaterialTheme.colorScheme.tertiary
+                            is VoiceInteractionState.Responding -> CozyPrimary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = when (voiceState) {
                             is VoiceInteractionState.Idle -> "Tell me about your symptoms or ask about your prescription."
                             is VoiceInteractionState.Listening -> "Speak now. Tap the orb when done."
-                            is VoiceInteractionState.Processing -> (voiceState as VoiceInteractionState.Processing).transcription
-                            is VoiceInteractionState.Responding -> "AI response playing..."
+                            is VoiceInteractionState.Processing -> "Voice captured — AI is thinking..."
+                            is VoiceInteractionState.Responding -> overlayResponse.take(120).ifBlank { "AI response playing..." }
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -430,7 +445,7 @@ fun CozyBottomNav(
         verticalAlignment = Alignment.CenterVertically
     ) {
         BottomNavItem(Icons.Rounded.History, "History", currentRoute == Routes.HISTORY, onHistoryClick)
-        BottomNavItem(Icons.Rounded.Mic, "Listen", currentRoute == Routes.HOME, onTalkClick, highlighted = true)
+        BottomNavItem(Icons.Rounded.Mic, "Listen", currentRoute == Routes.HOME, onTalkClick)
         BottomNavItem(Icons.Rounded.DocumentScanner, "Scan", false, onScanClick)
     }
 }
@@ -438,10 +453,9 @@ fun CozyBottomNav(
 @Composable
 fun BottomNavItem(
     icon: ImageVector, label: String, isActive: Boolean,
-    onClick: () -> Unit, highlighted: Boolean = false
+    onClick: () -> Unit
 ) {
-    val active = isActive || highlighted
-    val bg = if (active) Color(0xFFE8EFE9) else Color.Transparent
+    val bg = if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else Color.Transparent
     Column(
         modifier = Modifier
             .clip(RoundedCornerShape(50))
@@ -451,12 +465,12 @@ fun BottomNavItem(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(icon, label,
-            tint = if (active) CozyPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = if (isActive) CozyPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.height(2.dp))
         Text(label, style = MaterialTheme.typography.labelSmall,
-            color = if (active) CozyPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = if (active) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal)
+            color = if (isActive) CozyPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = if (isActive) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal)
     }
 }
 

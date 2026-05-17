@@ -1,8 +1,11 @@
 package com.mednavigator.app.ui.screens
 
+import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,8 +23,10 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -30,13 +35,17 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -50,10 +59,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.mednavigator.app.data.OnboardingRepository
 import com.mednavigator.app.data.models.Conversation
 import com.mednavigator.app.ui.navigation.Routes
 import com.mednavigator.app.ui.theme.CozyOnPrimaryFixedVariant
@@ -61,6 +76,7 @@ import com.mednavigator.app.ui.theme.CozyPrimary
 import com.mednavigator.app.ui.theme.CozyPrimaryFixed
 import com.mednavigator.app.ui.theme.CozySecondaryContainer
 import com.mednavigator.app.ui.theme.CozySurfaceContainerLowest
+import com.mednavigator.app.ui.theme.CozyTertiaryFixed
 import com.mednavigator.app.ui.viewmodel.HistoryViewModel
 
 @Composable
@@ -72,6 +88,9 @@ fun HistoryScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
     var deleteTarget by remember { mutableStateOf<Conversation?>(null) }
+    var showSummary by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val onboardingRepo = remember { OnboardingRepository(context) }
 
     val filtered = remember(searchQuery, conversations) {
         if (searchQuery.isBlank()) conversations
@@ -163,6 +182,18 @@ fun HistoryScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(16.dp))
+
+                // Profile summary card
+                if (conversations.isNotEmpty()) {
+                    ProfileSummaryBanner(
+                        userName = onboardingRepo.getUserName(),
+                        age = onboardingRepo.getUserAge(),
+                        sex = onboardingRepo.getUserSex(),
+                        sessionCount = conversations.size,
+                        onClick = { showSummary = true }
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
 
                 // Search field
                 OutlinedTextField(
@@ -258,6 +289,234 @@ fun HistoryScreen(
             onScanClick = { navController.navigate(Routes.HOME) }
         )
     }
+
+    // Profile summary sheet
+    if (showSummary) {
+        ProfileSummaryDialog(
+            onDismiss = { showSummary = false },
+            userName = onboardingRepo.getUserName(),
+            age = onboardingRepo.getUserAge(),
+            sex = onboardingRepo.getUserSex(),
+            country = onboardingRepo.getUserCountry(),
+            conversations = conversations,
+            onShare = { summaryText ->
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_SUBJECT, "My Health Summary - MedNavigator")
+                    putExtra(Intent.EXTRA_TEXT, summaryText)
+                }
+                context.startActivity(Intent.createChooser(intent, "Share with doctor"))
+            }
+        )
+    }
+}
+
+@Composable
+fun ProfileSummaryBanner(
+    userName: String,
+    age: Int,
+    sex: String,
+    sessionCount: Int,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = CozyPrimaryFixed),
+        elevation = CardDefaults.cardElevation(0.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(CozyPrimary),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.Person, null, tint = Color.White, modifier = Modifier.size(26.dp))
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = userName,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = CozyOnPrimaryFixedVariant,
+                    fontWeight = FontWeight.SemiBold
+                )
+                val detail = buildString {
+                    if (age > 0) append("$age yrs")
+                    if (sex.isNotBlank()) { if (isNotEmpty()) append(" · "); append(sex) }
+                }
+                if (detail.isNotBlank()) {
+                    Text(
+                        text = detail,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = CozyOnPrimaryFixedVariant.copy(alpha = 0.7f)
+                    )
+                }
+                Text(
+                    text = "$sessionCount session${if (sessionCount != 1) "s" else ""} recorded",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = CozyOnPrimaryFixedVariant.copy(alpha = 0.6f)
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Rounded.Share, null, tint = CozyOnPrimaryFixedVariant, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    "Summary",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = CozyOnPrimaryFixedVariant.copy(alpha = 0.7f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ProfileSummaryDialog(
+    onDismiss: () -> Unit,
+    userName: String,
+    age: Int,
+    sex: String,
+    country: String,
+    conversations: List<Conversation>,
+    onShare: (String) -> Unit
+) {
+    val summaryText = remember(conversations) {
+        buildProfileSummaryText(userName, age, sex, country, conversations)
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.94f)
+                .clip(RoundedCornerShape(28.dp)),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 4.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Health Summary",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = CozyPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(onClick = { onShare(summaryText) }) {
+                        Icon(Icons.Rounded.Share, "Share", tint = CozyPrimary)
+                    }
+                }
+                Text(
+                    "Share this with your doctor",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        summaryText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Close")
+                    }
+                    Card(
+                        modifier = Modifier
+                            .weight(2f)
+                            .clickable { onShare(summaryText) },
+                        shape = RoundedCornerShape(50.dp),
+                        colors = CardDefaults.cardColors(containerColor = CozyPrimary)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Rounded.Share, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Share with Doctor", color = Color.White, style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun buildProfileSummaryText(
+    userName: String,
+    age: Int,
+    sex: String,
+    country: String,
+    conversations: List<Conversation>
+): String = buildString {
+    appendLine("═══════════════════════════════")
+    appendLine("  PATIENT HEALTH SUMMARY")
+    appendLine("  Generated by MedNavigator")
+    appendLine("═══════════════════════════════")
+    appendLine()
+    appendLine("PATIENT PROFILE")
+    appendLine("Name   : $userName")
+    if (age > 0) appendLine("Age    : $age years")
+    if (sex.isNotBlank()) appendLine("Sex    : $sex")
+    if (country.isNotBlank()) appendLine("Country: $country")
+    appendLine()
+    appendLine("CONSULTATION HISTORY")
+    appendLine("Total sessions : ${conversations.size}")
+    val ongoing = conversations.count { it.isOngoing() }
+    if (ongoing > 0) appendLine("Active sessions: $ongoing")
+    appendLine()
+    if (conversations.isNotEmpty()) {
+        appendLine("RECENT SESSIONS")
+        conversations.take(5).forEachIndexed { i, conv ->
+            appendLine()
+            appendLine("${i + 1}. ${conv.title}")
+            appendLine("   Messages : ${conv.messageCount}")
+            if (!conv.systemSummary.isNullOrBlank()) {
+                appendLine("   Summary  : ${conv.systemSummary}")
+            }
+        }
+        appendLine()
+    }
+    appendLine("───────────────────────────────")
+    appendLine("Note: This summary is generated from AI-assisted voice sessions. Please consult a qualified medical professional for diagnosis and treatment.")
+    appendLine("───────────────────────────────")
 }
 
 @Composable

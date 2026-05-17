@@ -19,7 +19,9 @@ import com.mednavigator.app.ui.components.VoiceInteractionState
 import com.mednavigator.app.services.SpeechToTextService
 import com.mednavigator.app.utils.Constants
 import java.io.File
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -62,6 +64,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     // Processing state (while waiting for model response)
     private val _isProcessing = MutableStateFlow(false)
     val isProcessing: StateFlow<Boolean> = _isProcessing
+
+    // Tracks the currently active inference job so it can be cancelled
+    private var activeVoiceJob: Job? = null
 
     // Current response being streamed
     private val _currentResponse = MutableStateFlow("")
@@ -357,7 +362,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        viewModelScope.launch {
+        // Cancel any previous in-flight request (handles request flooding)
+        activeVoiceJob?.cancel()
+
+        // Immediately show "Processing" so user knows their voice was captured
+        _voiceState.value = VoiceInteractionState.Processing("Voice captured")
+        _statusMessage.value = "Processing your voice..."
+
+        activeVoiceJob = viewModelScope.launch {
             try {
                 _isProcessing.value = true
                 _statusMessage.value = "Transcribing audio..."
@@ -446,11 +458,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     _statusMessage.value = "Error: $errorMsg"
                     _voiceState.value = VoiceInteractionState.Idle
                 }
+            } catch (e: CancellationException) {
+                // Job was cancelled (user navigated away or new request came in) — clean up quietly
+                ttsService.stop()
+                _voiceState.value = VoiceInteractionState.Idle
+                _isProcessing.value = false
+                _statusMessage.value = "Ready"
+                Log.d(TAG, "Voice job cancelled")
+                throw e // must re-throw CancellationException
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing voice message", e)
                 _statusMessage.value = "Error: ${e.message}"
                 _voiceState.value = VoiceInteractionState.Idle
                 _isProcessing.value = false
+            } finally {
+                if (activeVoiceJob?.isCancelled == false) activeVoiceJob = null
             }
         }
     }
@@ -532,6 +554,24 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _voiceState.value = VoiceInteractionState.Idle
         _isProcessing.value = false
         _statusMessage.value = "Ready"
+    }
+
+    /**
+     * Called when the user leaves HomeScreen. Cancels any in-flight inference,
+     * stops TTS, and resets voice state so nothing fires on another screen.
+     */
+    fun pauseSession() {
+        if (_isRecording.value) {
+            audioRecorder.stopRecording()
+            _isRecording.value = false
+        }
+        activeVoiceJob?.cancel()
+        activeVoiceJob = null
+        ttsService.stop()
+        _voiceState.value = VoiceInteractionState.Idle
+        _isProcessing.value = false
+        _statusMessage.value = "Ready"
+        Log.d(TAG, "Session paused — voice job cancelled, TTS stopped")
     }
 
     /**
