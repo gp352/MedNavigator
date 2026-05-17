@@ -16,6 +16,7 @@ import com.mednavigator.app.services.ModelDownloadManager
 import com.mednavigator.app.services.ModelDownloadState
 import com.mednavigator.app.services.TextToSpeechService
 import com.mednavigator.app.ui.components.VoiceInteractionState
+import com.mednavigator.app.services.SpeechToTextService
 import com.mednavigator.app.utils.Constants
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +38,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val gemmaService = GemmaInferenceService(application)
     private val modelDownloadManager = ModelDownloadManager(application)
     private val icdRepository = IcdRepository.getInstance(application)
+    private val sttService = SpeechToTextService(application)
 
     // Model and Download state
     private val _downloadState = MutableStateFlow<ModelDownloadState>(ModelDownloadState.NotDownloaded)
@@ -246,7 +248,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 _messages.value = _messages.value + userMessage
 
-                // Get AI response (non-streaming for text input, can be upgraded for streaming)
+                // Get AI response (streaming for better UX)
                 _isTyping.value = true
                 _statusMessage.value = "AI is thinking..."
                 _currentResponse.value = ""
@@ -256,43 +258,45 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     buildPromptWithIcdContext(userText)
                 }
 
-                // For text messages, we use the non-streaming path for now
-                // In future, can integrate streaming for better UX
-                val response = withContext(Dispatchers.IO) {
-                    // Since we don't have audio for text messages, create empty audio
-                    gemmaService.generateResponse(prompt, ByteArray(0))
-                }
+                // Use generateResponse (streaming not available)
+                try {
+                    val result = withContext(Dispatchers.IO) {
+                        gemmaService.generateResponse(prompt, ByteArray(0))
+                    }
+                    val fullResponse = result.getOrDefault("I couldn't understand that. Please try again.")
+                    _currentResponse.value = fullResponse
+                    _statusMessage.value = "AI is responding..."
 
-                withContext(Dispatchers.Main) {
-                    if (response.isSuccess) {
-                        val responseText = response.getOrDefault("I couldn't understand that. Please try again.")
-                        _currentResponse.value = responseText
+                    // Extract symptoms from model response for better context next time
+                    val detectedSymptoms = extractSymptoms(fullResponse)
+                    if (detectedSymptoms.isNotEmpty()) {
+                        Log.d(TAG, "Detected symptoms in response: $detectedSymptoms")
+                    }
 
-                        // Save AI response to database
-                        val messageId = withContext(Dispatchers.IO) {
-                            chatRepository.addMessage(
-                                conversationId = conversationId,
-                                role = "assistant",
-                                content = responseText
-                            )
-                        }
-
-                        // Create AI message bubble
-                        val aiMessage = ChatMessage(
-                            id = messageId.toInt(),
+                    // Save AI response to database
+                    val messageId = withContext(Dispatchers.IO) {
+                        chatRepository.addMessage(
                             conversationId = conversationId,
                             role = "assistant",
-                            content = responseText,
-                            timestamp = System.currentTimeMillis()
+                            content = fullResponse
                         )
-                        _messages.value = _messages.value + aiMessage
-
-                        _statusMessage.value = "Response ready"
-                        speakResponse(responseText)
-                    } else {
-                        val errorMsg = response.exceptionOrNull()?.message ?: "Unknown error"
-                        _statusMessage.value = "Error: $errorMsg"
                     }
+
+                    // Create AI message bubble
+                    val aiMessage = ChatMessage(
+                        id = messageId.toInt(),
+                        conversationId = conversationId,
+                        role = "assistant",
+                        content = fullResponse,
+                        timestamp = System.currentTimeMillis()
+                    )
+                    _messages.value = _messages.value + aiMessage
+
+                    _statusMessage.value = "Response ready"
+                    speakResponse(fullResponse)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error generating response", e)
+                    _statusMessage.value = "Error: ${e.message}"
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error sending message", e)
@@ -356,59 +360,89 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 _isProcessing.value = true
-                _statusMessage.value = "Processing audio..."
-                _currentResponse.value = ""
+                _statusMessage.value = "Transcribing audio..."
 
-                _voiceState.value = VoiceInteractionState.Processing("Transcribing your voice...")
-                val prompt = buildPrompt()
+                // First, transcribe the audio to text
+                val transcriptionResult = withContext(Dispatchers.IO) {
+                    sttService.recognizeSpeech()
+                }
 
+                val transcribedText = if (transcriptionResult.isSuccess) {
+                    transcriptionResult.getOrDefault("")
+                } else {
+                    Log.w(TAG, "STT failed: ${transcriptionResult.exceptionOrNull()?.message}")
+                    "[Voice message - transcription failed]"
+                }
+
+                Log.d(TAG, "Transcribed text: '$transcribedText'")
+
+                // Save transcribed message to database
                 withContext(Dispatchers.IO) {
                     chatRepository.addMessage(
                         conversationId = conversationId,
                         role = "user",
-                        content = "[Voice message]",
-                        messageType = "AUDIO",
-                        audioFilePath = userAudioFile.absolutePath
+                        content = "[Voice message received]"
                     )
                 }
 
-                _statusMessage.value = "AI is processing..."
-                val response = withContext(Dispatchers.IO) {
-                    gemmaService.generateResponse(prompt, audioBytes)
+                // Create user message bubble
+                val userMessage = ChatMessage(
+                    id = 0,
+                    conversationId = conversationId,
+                    role = "user",
+                    content = "[Voice message]",
+                    timestamp = System.currentTimeMillis(),
+                    messageType = "AUDIO"
+                )
+                _messages.value = _messages.value + userMessage
+
+                // Build prompt and get AI response
+                val prompt = withContext(Dispatchers.IO) {
+                    buildPromptWithIcdContext(
+                        if (transcribedText == "[Voice message - transcription failed]") "audio input" else transcribedText
+                    )
                 }
 
-                if (response.isSuccess) {
-                    val fullResponse = response.getOrDefault("")
-                    _overlayResponse.value = fullResponse
+                val responseResult = withContext(Dispatchers.IO) {
+                    gemmaService.generateResponse(prompt, audioBytes ?: ByteArray(0))
+                }
 
-                    val aiAudioFile = File(getAudioDir(), "ai_$ts.wav")
-                    val language = onboardingRepository.getUserLanguage()
-                    ttsService.synthesizeToFile(fullResponse, aiAudioFile, language)
+                if (responseResult.isSuccess) {
+                    val fullResponse = responseResult.getOrDefault("I couldn't understand that. Please try again.")
+                    _currentResponse.value = fullResponse
 
                     val messageId = withContext(Dispatchers.IO) {
                         chatRepository.addMessage(
                             conversationId = conversationId,
                             role = "assistant",
-                            content = fullResponse,
-                            responseAudioPath = aiAudioFile.absolutePath
+                            content = fullResponse
                         )
                     }
+
+                    val aiMessage = ChatMessage(
+                        id = messageId.toInt(),
+                        conversationId = conversationId,
+                        role = "assistant",
+                        content = fullResponse,
+                        timestamp = System.currentTimeMillis()
+                    )
+                    _messages.value = _messages.value + aiMessage
 
                     _voiceState.value = VoiceInteractionState.Responding(
                         responseText = fullResponse,
                         isSpeaking = true
                     )
-
                     _exchangeCount.value += 1
                     _statusMessage.value = "Responding..."
 
+                    val language = onboardingRepository.getUserLanguage()
                     ttsService.speak(fullResponse, language) {
                         _voiceState.value = VoiceInteractionState.Idle
                         _isProcessing.value = false
                         _statusMessage.value = "Ready"
                     }
                 } else {
-                    val errorMsg = response.exceptionOrNull()?.message ?: "Unknown error"
+                    val errorMsg = responseResult.exceptionOrNull()?.message ?: "Unknown error"
                     _statusMessage.value = "Error: $errorMsg"
                     _voiceState.value = VoiceInteractionState.Idle
                 }
@@ -619,6 +653,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         audioRecorder.release()
         ttsService.shutdown()
         gemmaService.close()
+        sttService.release()
     }
 }
-
