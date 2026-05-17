@@ -113,6 +113,7 @@ fun ConversationDetailScreen(
 @Composable
 private fun MessageWithAudioCard(message: ChatMessage) {
     val isUser = message.isFromUser()
+    val isVoice = message.isVoiceMessage()
     val alignment = if (isUser) Alignment.End else Alignment.Start
     val cardColor = if (isUser) CozyPrimaryFixed else MaterialTheme.colorScheme.surfaceContainerLow
     val audioPath = if (isUser) message.audioFilePath else message.responseAudioPath
@@ -133,6 +134,7 @@ private fun MessageWithAudioCard(message: ChatMessage) {
             elevation = CardDefaults.cardElevation(1.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
+                // Header row
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -145,7 +147,7 @@ private fun MessageWithAudioCard(message: ChatMessage) {
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (isUser) Icons.Rounded.Mic else Icons.Rounded.PlayArrow,
+                            imageVector = if (isVoice) Icons.Rounded.Mic else if (isUser) Icons.Rounded.Mic else Icons.Rounded.PlayArrow,
                             contentDescription = null,
                             tint = if (isUser) androidx.compose.ui.graphics.Color.White else CozyPrimary,
                             modifier = Modifier.size(14.dp)
@@ -157,14 +159,46 @@ private fun MessageWithAudioCard(message: ChatMessage) {
                         style = MaterialTheme.typography.labelLarge,
                         color = CozyPrimary
                     )
+                    if (isVoice) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "· Voice",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = CozyPrimary.copy(alpha = 0.6f)
+                        )
+                    }
                 }
 
-                if (message.content.isNotBlank() && message.content != "[Voice message]") {
+                // Message content (transcript or AI response)
+                val displayContent = when {
+                    isVoice && message.content != "[Voice message]" -> message.content
+                    isVoice -> null  // no transcript available
+                    message.content.isNotBlank() -> message.content
+                    else -> null
+                }
+
+                if (displayContent != null) {
                     Text(
-                        text = message.content,
+                        text = displayContent,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                } else if (isVoice) {
+                    // STT failed — show placeholder
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Rounded.Mic,
+                            null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Voice message (no transcript)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 if (audioPath != null) {

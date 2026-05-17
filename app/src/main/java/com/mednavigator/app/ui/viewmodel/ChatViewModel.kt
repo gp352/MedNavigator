@@ -388,23 +388,42 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                 Log.d(TAG, "Transcribed text: '$transcribedText'")
 
-                // Save transcribed message to database
-                withContext(Dispatchers.IO) {
+                val displayText = if (transcribedText.isNotBlank() &&
+                    transcribedText != "[Voice message - transcription failed]") {
+                    transcribedText
+                } else {
+                    "[Voice message]"
+                }
+
+                // On first exchange update the session title to the transcript
+                if (_exchangeCount.value == 0 && displayText != "[Voice message]") {
+                    val title = displayText.take(60).let { if (displayText.length > 60) "$it…" else it }
+                    withContext(Dispatchers.IO) {
+                        chatRepository.updateConversationTitle(conversationId, title)
+                    }
+                    _currentConversation.value = _currentConversation.value?.copy(title = title)
+                }
+
+                // Save user voice message — store transcript as content so it's readable in history
+                val userMsgId = withContext(Dispatchers.IO) {
                     chatRepository.addMessage(
                         conversationId = conversationId,
                         role = "user",
-                        content = "[Voice message received]"
+                        content = displayText,
+                        messageType = "VOICE",
+                        voiceTranscript = transcribedText.ifBlank { null }
                     )
                 }
 
                 // Create user message bubble
                 val userMessage = ChatMessage(
-                    id = 0,
+                    id = userMsgId.toInt(),
                     conversationId = conversationId,
                     role = "user",
-                    content = "[Voice message]",
+                    content = displayText,
                     timestamp = System.currentTimeMillis(),
-                    messageType = "AUDIO"
+                    messageType = "VOICE",
+                    voiceTranscript = transcribedText.ifBlank { null }
                 )
                 _messages.value = _messages.value + userMessage
 

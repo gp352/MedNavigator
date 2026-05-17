@@ -9,14 +9,16 @@ data class ChatMessage(
     val role: String,              // "user" or "assistant"
     val content: String,
     val timestamp: Long,
-    val messageType: String = "TEXT", // TEXT, IMAGE, ANNOTATION
+    val messageType: String = "TEXT", // TEXT, VOICE, IMAGE, ANNOTATION
     val imageHash: String? = null,
     val reasoningSteps: List<ReasoningStep> = emptyList(),
     val audioFilePath: String? = null,
-    val responseAudioPath: String? = null
+    val responseAudioPath: String? = null,
+    val voiceTranscript: String? = null  // raw STT transcript (set when messageType == "VOICE")
 ) {
     fun isFromUser(): Boolean = role == "user"
     fun isFromAssistant(): Boolean = role == "assistant"
+    fun isVoiceMessage(): Boolean = messageType == "VOICE"
 }
 
 // Reasoning step exposed to user for explainability

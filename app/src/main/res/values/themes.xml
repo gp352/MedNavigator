@@ -1,5 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!--
+        OS-level theme applied before Compose loads.
+        Uses brand colors so the window background and status bar
+        match the Compose MedNavigatorTheme from the very first frame.
+    -->
+    <style name="Theme.MedNavigator" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Warm off-white background — matches CozyBackground (#FBF9F5) -->
+        <item name="android:windowBackground">@color/cozy_background</item>
+        <!-- Transparent system bars — edge-to-edge handled by Compose -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
 
-    <style name="Theme.MedNavigator" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+        API 31+ Splash Screen API: shows the brand icon on a sage-green
+        background while the app cold-starts (before Compose is ready).
+    -->
+    <style name="Theme.MedNavigator.Splash" parent="Theme.MedNavigator">
+        <item name="android:windowSplashScreenBackground">@color/cozy_primary</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
 </resources>

@@ -10,7 +10,7 @@ class ChatRepository(context: Context) {
         context.applicationContext,
         AppDatabase::class.java,
         "med_navigator.db"
-    ).addMigrations(MIGRATION_2_3).build()
+    ).addMigrations(MIGRATION_2_3, MIGRATION_3_4).build()
 
     private val conversationDao = database.conversationDao()
     private val messageDao = database.chatMessageDao()
@@ -48,7 +48,8 @@ class ChatRepository(context: Context) {
         imageHash: String? = null,
         reasoningSteps: List<ReasoningStep> = emptyList(),
         audioFilePath: String? = null,
-        responseAudioPath: String? = null
+        responseAudioPath: String? = null,
+        voiceTranscript: String? = null
     ): Long {
         val reasoningJson = if (reasoningSteps.isNotEmpty()) {
             com.google.gson.Gson().toJson(reasoningSteps)
@@ -65,8 +66,13 @@ class ChatRepository(context: Context) {
             imageHash = imageHash,
             reasoningJson = reasoningJson,
             audioFilePath = audioFilePath,
-            responseAudioPath = responseAudioPath
+            responseAudioPath = responseAudioPath,
+            voiceTranscript = voiceTranscript
         )
+        // Keep messageCount in sync
+        conversationDao.getConversationById(conversationId)?.let {
+            conversationDao.updateConversation(it.copy(messageCount = it.messageCount + 1))
+        }
         return messageDao.insertMessage(message)
     }
 
@@ -106,6 +112,11 @@ class ChatRepository(context: Context) {
             val messages = messageDao.getMessagesForConversation(entity.id).map { it.toDomain() }
             entity.toDomain(messages)
         }
+    }
+
+    // Update the title of a conversation (e.g. after first message)
+    suspend fun updateConversationTitle(conversationId: Int, title: String) {
+        conversationDao.updateTitle(conversationId, title)
     }
 
     // Count messages in a conversation

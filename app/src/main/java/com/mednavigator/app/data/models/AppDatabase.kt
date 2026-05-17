@@ -50,7 +50,8 @@ data class ChatMessageEntity(
     val imageHash: String? = null,
     val reasoningJson: String? = null,
     val audioFilePath: String? = null,
-    val responseAudioPath: String? = null
+    val responseAudioPath: String? = null,
+    val voiceTranscript: String? = null   // raw STT transcript for VOICE messages
 )
 
 // DAO
@@ -82,6 +83,9 @@ interface ConversationDao {
 
     @Delete
     suspend fun deleteConversation(conversation: ConversationEntity)
+
+    @Query("UPDATE conversations SET title = :title WHERE id = :id")
+    suspend fun updateTitle(id: Int, title: String)
 }
 
 @Dao
@@ -107,10 +111,17 @@ val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
     }
 }
 
+// Migration from v3 to v4: add voiceTranscript column
+val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
+    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE chat_messages ADD COLUMN voiceTranscript TEXT")
+    }
+}
+
 // Database
 @Database(
     entities = [SessionEntity::class, ConversationEntity::class, ChatMessageEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
